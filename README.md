@@ -109,7 +109,32 @@ Once you're paired, lock access so only you can use the bot:
 
 > The default `pairing` policy is temporary. Always lock to `allowlist` once your account is paired.
 
-## Step 6: Name Your Session
+## Step 6: Enable Guild Channel Auto-Reply (Optional)
+
+By default, the bot only responds to DMs. To make it respond to **every message** in a specific server channel (without needing `@mention`):
+
+```
+/discord:access group add <channel-id> --no-mention
+```
+
+To get a channel ID: enable **Developer Mode** in Discord (User Settings > Advanced), then right-click the channel > **Copy Channel ID**.
+
+Options:
+
+```bash
+# Auto-reply to all messages in the channel (no @mention needed)
+/discord:access group add <channel-id> --no-mention
+
+# Only respond when @mentioned or replied to (default)
+/discord:access group add <channel-id>
+
+# Restrict to specific users in the channel
+/discord:access group add <channel-id> --no-mention --allow user_id1,user_id2
+```
+
+> Changes take effect immediately — no restart needed.
+
+## Step 7: Name Your Session
 
 Name the session so you can resume it later:
 
@@ -123,7 +148,7 @@ Now you can resume with:
 claude --resume javis-discord --channels plugin:discord@claude-plugins-official
 ```
 
-## Step 7: Auto-Start on Login (Optional)
+## Step 8: Auto-Start on Login (Optional)
 
 To keep the bot alive across reboots, add a `.command` script as a macOS Login Item.
 
