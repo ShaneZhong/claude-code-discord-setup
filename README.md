@@ -210,9 +210,94 @@ chmod 600 ~/.claude/channels/discord/.env
 
 Then restart the `claude --channels` session.
 
+## Bot-to-Bot Communication (Optional)
+
+By default, Discord bots ignore messages from other bots. To enable two Claude Code bots to communicate (e.g. Javis on MacBook + 小娜 on Mac Mini):
+
+### 1. Modify the Discord plugin server
+
+Edit the **correct** file (not the cache copy!):
+
+```
+~/.claude/plugins/marketplaces/claude-plugins-official/external_plugins/discord/server.ts
+```
+
+Find this block (~line 802):
+
+```ts
+client.on('messageCreate', msg => {
+  if (msg.author.bot) return
+  handleInbound(msg).catch(e => process.stderr.write(`discord: handleInbound failed: ${e}\n`))
+})
+```
+
+Replace with:
+
+```ts
+// Bot-to-bot cooldown tracker: "botId:channelId" → last processed timestamp
+const botCooldowns = new Map<string, number>()
+
+client.on('messageCreate', msg => {
+  // Always skip own messages to prevent infinite loops
+  if (msg.author.id === client.user?.id) return
+
+  // Bot messages: apply cooldown + depth limits (human users are unaffected)
+  if (msg.author.bot) {
+    const key = `${msg.author.id}:${msg.channelId}`
+    const now = Date.now()
+    if (now - (botCooldowns.get(key) ?? 0) < 5000) return
+    botCooldowns.set(key, now)
+  }
+
+  handleInbound(msg).catch(e => process.stderr.write(`discord: handleInbound failed: ${e}\n`))
+})
+```
+
+### 2. Apply on ALL machines
+
+Both bots need this change. If only one side is modified, that bot can see the other's messages but not vice versa.
+
+### 3. Restart Claude Code
+
+The MCP server reloads on restart:
+
+```bash
+claude --resume <session-name> --channels plugin:discord@claude-plugins-official
+```
+
+### 4. Ensure both bots have Message Content Intent enabled
+
+In [Discord Developer Portal](https://discord.com/developers/applications) → Bot → Privileged Gateway Intents → **Message Content Intent** must be ON for both bots.
+
+### 5. Channel setup for bot-to-bot
+
+For best results, use a channel with `requireMention: false`:
+
+```
+/discord:access group add <channel-id> --no-mention
+```
+
+Otherwise the sending bot must @mention the receiving bot in every message.
+
+### Common pitfall
+
+**Wrong file!** There are two copies of `server.ts`:
+- `~/.claude/plugins/cache/...` — NOT used at runtime
+- `~/.claude/plugins/marketplaces/...` — **this is the one that runs**
+
+Always edit the `marketplaces` copy. Plugin updates may overwrite it.
+
+### Anti-loop safeguards
+
+The cooldown code above provides:
+- **Self-filter**: bot never processes its own messages
+- **5-second cooldown**: per bot, per channel — prevents rapid ping-pong
+- **Human users unaffected**: no cooldown for real users
+
 ## Limitations
 
 - Bot only works while the Claude Code session is running
 - Messages sent while the session is closed are lost
 - No Slack support yet (Telegram and iMessage are also available)
 - Channels is a research preview feature (as of March 2026)
+- Plugin updates may overwrite the bot-to-bot modification — re-apply after updates
